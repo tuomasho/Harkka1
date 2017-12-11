@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript" src="js/curve.js"></script>
+	<meta charset="UTF-8">
+</head>
+<body>
+	<div id="piirto">
+	<canvas id="myCanvas" width="775" height="550" style="border:1px solid #000000;" background="#ccc" >
+    </canvas>
+	</div>
+	<div id="kysely">
+		<table>
+			<tr>
+				<td>A:</td>
+				<td><input type="text" id="A"></td>
+				<td><input type="range" id="aSlide" min="0.1" max="9.9" oninput="aSlideri(this.value)" step="0.1"></td>
+			</tr>
+			<tr>
+				<td>B:</td>
+				<td><input type="text" id="B"></td>
+				<td><input type="range" id="bSlide" min="0.1" max="9.9" oninput="bSlideri(this.value)" step="0.1"></td>
+			</tr>
+			<tr>
+				<td>&delta; :</td>
+				<td><input type="text" id="delta"></td>
+				<td><input type="range" id="dSlide" min="-3.14" max="3.14" oninput="dSlideri(this.value)" step="0.01"></td>
+			</tr>
+			<tr>
+				<td>&omega; :</td>
+				<td><input type="text" id="omega"></td>
+				<td><input type="range" id="oSlide" min="0.1" max="9.9" oninput="oSlideri(this.value)" step="0.1"></td>
+			</tr>
+		</table>
+	</div>
+	<button onclick="tulostus()">Tulosta</button>
+	<script type="text/javascript">
+	var A, B, omega ,delta;
+	var apuLuku1, apuLuku2, apuLuku3, apuLuku4, test;
+	var w0, w1, w2, cosD;
+	var aika, alkuosa;
+	var pisteet;
+	var pisteY, pisteYPX;
+	var BTN = document.getElementById("kysely");
+	
+	Math.Radians = function(degrees) {
+		return degrees * Math.PI / 180;
+	}
+	
+	BTN.onkeydown = function(e) {
+		if(e.keyCode == 13){
+				tulostus();
+			}
+	}
+	
+	function aSlideri(uusiArvo)
+		{
+			document.getElementById("A").value = uusiArvo;
+			tulostus();
+		}
+		
+	function bSlideri(uusiArvo)
+		{
+			document.getElementById("B").value = uusiArvo;
+			tulostus();
+		}
+	
+	function dSlideri(uusiArvo)
+		{
+			document.getElementById("delta").value = uusiArvo;
+			tulostus();
+		}
+		
+	function oSlideri(uusiArvo)
+		{
+			document.getElementById("omega").value = uusiArvo;
+			tulostus();
+		}
+	function tulostus(){
+		
+		//poistetaan edellinen canvas ja tehdään uusi piirtoa varten
+			$("#myCanvas").remove();
+			$("#piirto").append('<canvas id="myCanvas" width="775" height="550" style="border:1px solid #000000;" background="#ccc"></canvas>');
+		
+		//Piirretään koordinaatisto HUOM! origo on (25px,225px) 
+		function Graph(config) {
+				// user defined properties
+				this.canvas = document.getElementById(config.canvasId);
+				this.minX = -1;
+				this.minY = -11;
+				this.maxX = 30;
+				this.maxY = 11;
+				this.unitsPerTick = 1;
+				// constants
+				this.axisColor = '#aaa';
+				this.font = '8pt Calibri';
+				this.tickSize = 15;
+
+				// relationships
+				this.context = this.canvas.getContext('2d');
+				this.rangeX = this.maxX - this.minX;
+				this.rangeY = this.maxY - this.minY;
+				this.unitX = this.canvas.width / this.rangeX;
+				this.unitY = this.canvas.height / this.rangeY;
+				this.centerY = Math.round(Math.abs(this.minY / this.rangeY) * this.canvas.height);
+				this.centerX = Math.round(Math.abs(this.minX / this.rangeX) * this.canvas.width);
+				this.iteration = (this.maxX - this.minX) / 1000;
+				this.scaleX = this.canvas.width / this.rangeX;
+				this.scaleY = this.canvas.height / this.rangeY;
+
+				// draw x and y axis
+				this.drawXAxis();
+				this.drawYAxis();
+			  }
+			  Graph.prototype.drawXAxis = function() {
+				var context = this.context;
+				context.save();
+				context.beginPath();
+				context.moveTo(0, this.centerY);
+				context.lineTo(this.canvas.width, this.centerY);
+				context.strokeStyle = this.axisColor;
+				context.lineWidth = 2;
+				context.stroke();
+
+				// draw tick marks
+				var xPosIncrement = this.unitsPerTick * this.unitX;
+				var xPos, unit;
+				context.font = this.font;
+				context.textAlign = 'center';
+				context.textBaseline = 'top';
+
+				// draw left tick marks
+				xPos = this.centerX - xPosIncrement;
+				unit = -1 * this.unitsPerTick;
+				while(xPos > 0) {
+				  context.moveTo(xPos, this.centerY - this.tickSize / 2);
+				  context.lineTo(xPos, this.centerY + this.tickSize / 2);
+				  context.stroke();
+				  context.fillText(unit, xPos, this.centerY + this.tickSize / 2 + 3);
+				  unit -= this.unitsPerTick;
+				  xPos = Math.round(xPos - xPosIncrement);
+				}
+
+				// draw right tick marks
+				xPos = this.centerX + xPosIncrement;
+				unit = this.unitsPerTick;
+				while(xPos < this.canvas.width) {
+				  context.moveTo(xPos, this.centerY - this.tickSize / 2);
+				  context.lineTo(xPos, this.centerY + this.tickSize / 2);
+				  context.stroke();
+				  context.fillText(unit, xPos, this.centerY + this.tickSize / 2 + 3);
+				  unit += this.unitsPerTick;
+				  xPos = Math.round(xPos + xPosIncrement);
+				}
+				context.restore();
+			  };
+
+			  Graph.prototype.drawYAxis = function() {
+				var context = this.context;
+				context.save();
+				context.beginPath();
+				context.moveTo(this.centerX, 0);
+				context.lineTo(this.centerX, this.canvas.height);
+				context.strokeStyle = this.axisColor;
+				context.lineWidth = 2;
+				context.stroke();
+
+				// draw tick marks
+				var yPosIncrement = this.unitsPerTick * this.unitY;
+				var yPos, unit;
+				context.font = this.font;
+				context.textAlign = 'right';
+				context.textBaseline = 'middle';
+
+				// draw top tick marks
+				yPos = this.centerY - yPosIncrement;
+				unit = this.unitsPerTick;
+				while(yPos > 0) {
+				  context.moveTo(this.centerX - this.tickSize / 2, yPos);
+				  context.lineTo(this.centerX + this.tickSize / 2, yPos);
+				  context.stroke();
+				  context.fillText(unit, this.centerX - this.tickSize / 2 - 3, yPos);
+				  unit += this.unitsPerTick;
+				  yPos = Math.round(yPos - yPosIncrement);
+				}
+
+				// draw bottom tick marks
+				yPos = this.centerY + yPosIncrement;
+				unit = -1 * this.unitsPerTick;
+				while(yPos < this.canvas.height) {
+				  context.moveTo(this.centerX - this.tickSize / 2, yPos);
+				  context.lineTo(this.centerX + this.tickSize / 2, yPos);
+				  context.stroke();
+				  context.fillText(unit, this.centerX - this.tickSize / 2 - 3, yPos);
+				  unit -= this.unitsPerTick;
+				  yPos = Math.round(yPos + yPosIncrement);
+				}
+				context.restore();
+			  };
+			  var myGraph = new Graph({
+				canvasId: 'myCanvas',
+				minX: -10,
+				minY: -10,
+				maxX: 10,
+				maxY: 10,
+				unitsPerTick: 1
+			  });
+		
+		//haetaan canvaksen tiedot
+		var c=document.getElementById("myCanvas");
+		var ctx=c.getContext("2d");
+		
+		//Haetaan käyttäjän syöttämät arvot
+		
+		A = document.getElementById("A").value;
+		B = document.getElementById("B").value;
+		omega = document.getElementById("omega").value;
+		delta = document.getElementById("delta").value;
+		
+		if(omega < B)
+		{
+			pisteet = new Array();
+			var t = 0.00;
+			W2();
+			for(var x = 25; x < 775; x++)
+			{
+				alkuOsa(t);
+				cosDCalc();
+				// lasketaan e ^ (w2 * t)
+				apuLuku3 = Math.exp(1 * w2 * t);
+				
+				// lasketaan (cos(delta) - delta) / 2
+				apuLuku4 = (cosD - delta * 1) / 2;
+				
+				//"kasataan" apuLuku1
+				apuLuku1 = apuLuku4 * apuLuku3;
+				
+				//lähdetään rakentamaan toista apulukua
+				//lasketaan e ^ (-1 * w2 * t)
+				apuLuku3 = Math.exp(-1 * w2 * t);
+				
+				//lasketaan (cos(delta) + delta) / 2
+				apuLuku4 = (cosD * 1 + delta * 1) / 2;
+				
+				//alert(cosD + " & aika:" + t);
+				//"kasataan" apuLuku2
+				apuLuku2 = apuLuku4 * apuLuku3;
+				
+				//lasketaan Y:n arvo apuLukujen avulla
+				
+				apuLuku3 = alkuosa * (apuLuku1 + apuLuku2);
+				pisteY = apuLuku3.toFixed(2);
+				
+				//lasketaan Y:n arvo pikseleinä
+				
+				apuLuku3 = (11 - pisteY) * 25;
+				pisteYPX = apuLuku3.toFixed(2);
+				
+				//lisätään uusi piste taulukkoon
+				
+				pisteet.push(x, pisteYPX);
+				
+				//lisätään aikaan 0.04 (1/25)
+				t = t + 0.04;
+			}
+		}
+		else
+		{
+			pisteet = new Array();
+			var t = 0.00;
+			W1();
+			for(var x = 25; x < 775; x++)
+			{
+				alkuOsa(t);
+				
+				//lasketaan loppuosa kaavasta
+				apuLuku2 = w1 * t - delta;
+				apuLuku1 = Math.cos(apuLuku2);
+				
+				//kerrotaan alku ja loppuosat keskenään
+				apuLuku3 = alkuosa * apuLuku1;
+				pisteY = apuLuku3.toFixed(2);
+				
+				//muutetaan y:n arvo pikseleiksi
+				apuLuku3 = (11 - pisteY) * 25;
+				pisteYPX = apuLuku3.toFixed(2);
+				
+				//lisätään uusi piste taulukkoon
+				pisteet.push(x, pisteYPX);
+				
+				//lisätään aikaan 0.04 (1/25)
+				t = t + 0.04;
+			}
+		}
+		
+		ctx.beginPath();
+		ctx.moveTo(25,pisteet[1]);
+		ctx.curve(pisteet,0.3);
+		ctx.lineWidth = 5;
+		ctx.strokeStyle = "#5BE523";
+		ctx.stroke();
+	}
+	
+	function W1() {
+	
+		apuLuku1 = Math.pow(omega, 2) - Math.pow(B, 2);
+		w1 = Math.sqrt(apuLuku1);
+	}
+	
+	function W2() {
+	
+		apuLuku1 = Math.pow(B, 2) - Math.pow(omega, 2);
+		w2 = Math.sqrt(apuLuku1);
+	}
+	
+	function alkuOsa(aika) {
+	
+		apuLuku1 = Math.exp(-1 * B * aika);
+		alkuosa = A * apuLuku1;
+	}
+	
+	function cosDCalc() {
+	
+		apuLuku4 = Math.cos(delta);
+		cosD = apuLuku4.toFixed(2);
+	}
+
+	 </script>
+</body>
+</html>

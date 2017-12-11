@@ -1,0 +1,419 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <style>
+    body {
+        margin: 0px;
+        padding: 0px;
+    }
+	#kysely{
+		float: left;
+		margin-top: 100px;
+		margin-left: 25px;
+	}
+	#piirto{
+		margin-left: 460px;
+	}
+	#KiinnostavatPisteet{
+		margin-left: 200px;
+		margin-top: 25px;
+	}
+	#tehtavat{
+		float: left;
+		margin-top: 275px;
+		margin-left: 25px;
+		position: absolute;
+	}
+    </style>
+	<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+	<script type="text/javascript" src="js/curve.js"></script>
+	<meta charset="UTF-8">
+  </head>
+  <body>
+		<div id="kysely">
+		<table>
+			<tr>
+				<td>Kulma:</td>
+				<td><input type="text" name="kulma" id="kulma"></td>
+				<td><input type="range" id="kulmaSlide" min="0" max="90" oninput="kulmaSlideri(this.value)" step="0.1"></td>
+			</tr>
+			<tr>
+				<td>Lähtönopeus:</td>
+				<td><input type="text" name="v0" id="v0"></td>
+				<td><input type="range" id="nopeusSlide" min="0" max="50" oninput="nopeusSlideri(this.value)" step="0.1"></td>
+			</tr>
+		</table>
+		<p>Kulma syötetään asteina ja nopeus m/s</p>
+		<button type="button" id="btn" name="Tulosta" onclick="tulostus()">Tulosta</button>
+		</div>
+		<div id="tehtavat">
+			<div id="tehtava1" style="display:none">
+				<p>Keihästä heitetään <input type="text" id="tKulma" readonly> asteen kulmassa.</p>
+				<p>Mikä on oltava lähtönopeus, jotta keihäs lentäisi 200m?</p>
+				<p>Vastaus riittää kahden desimaalin tarkkuudelle pyöristettynä</p>
+			</div>
+			<div id="vastausDiv" style="display:none">
+				Vastaus: <input type="text" id="vastaus">
+			</div>
+			</br></br>
+			<button id="tarkista" onclick="tarkistus()" style="display:none">Tarkista</button>
+			<button id="annateht" onclick="annateht()" style="display:block">Anna tehtävä</button>
+			<p id="OV" name="Oikein/Vaarin"></p>
+		</div>
+		</br>
+        <div id="piirto">
+		<canvas id="myCanvas" width="500" height="500" style="border:1px solid #000000;" background="#ccc" >
+        </canvas>
+		</div>	
+		</br>
+		<div id="KiinnostavatPisteet">
+		<p>Kuvaajassa on käytetty seuraavaa mitoitusta: yksi x:n väli = 15m & yksi y:n väli = 5m</p>
+		<table>
+			<tr>
+				<td>Lentoaika:</td>
+				<td><input id="lentoaika" type="text" readonly></td>
+				<td>s</td>
+			</tr>
+			<tr>
+				<td>Matka</td>
+				<td><input id="matka" type="text" readonly></td>
+				<td>m</td>
+			</tr>
+			<tr>
+				<td>Huippu</td>
+				<td><input id="huippu" type="text" readonly></td>
+				<td>m</td>
+			</tr>
+		</table>
+		</div>
+		<script type="text/javascript">
+		//muista vaihtaa type="text/javascript" jos se on "text/coffeescript"
+		var kulma, voima, lentoaika, matka, matkaPX, aika, tKulma, tNopeus;
+		var g = 9.81;
+		var v0,v0x,v0y;
+		var apuLuku1, apuLuku2, apuLuku3;
+		var huippuY;
+		var pisteet;
+		var pisteY, pisteYPX;
+		var btn = document.getElementById("kysely");
+		var kulmaBTN = document.getElementById("kulma");
+		var v0BTN = document.getElementById("v0");
+		var vastaus, ylaraja, alaraja;
+		
+		btn.onkeydown = function(e){
+			if(e.keyCode == 13){
+				tulostus();
+			}
+		}
+		
+		kulmaBTN.onkeyup = function(){
+			
+			document.getElementById("kulmaSlide").value = document.getElementById("kulma").value;
+			
+			if(document.getElementById("kulma").value > 0 && document.getElementById("v0").value > 0)
+			{
+				tulostus();
+			}
+		}
+		
+		v0BTN.onkeyup = function(){
+			
+			document.getElementById("nopeusSlide").value = document.getElementById("v0").value;
+			
+			if(document.getElementById("kulma").value > 0 && document.getElementById("v0").value > 0)
+			{
+				tulostus();
+			}
+		}
+		
+		function kulmaSlideri(uusiArvo)
+		{
+			document.getElementById("kulma").value = uusiArvo ;
+			
+			if(document.getElementById("kulma").value > 0 && document.getElementById("v0").value > 0)
+			tulostus();
+		}
+		
+		function nopeusSlideri(uusiArvo)
+		{
+			document.getElementById("v0").value = uusiArvo ;
+			
+			if(document.getElementById("v0").value > 0 && document.getElementById("kulma").value > 0)
+			tulostus();
+		}
+		
+		Math.Radians = function(degrees) {
+		return degrees * Math.PI / 180;
+		}
+
+		function tulostus() {
+
+			//poistetaan edellinen canvas ja tehdään uusi piirtoa varten
+			$("#myCanvas").remove();
+			$("#piirto").append('<canvas id="myCanvas" width="500" height="500" style="border:1px solid #000000;" background="#ccc"></canvas>');
+			
+		
+			function Graph(config) {
+			// user defined properties
+			this.canvas = document.getElementById(config.canvasId);
+			this.minX = -1;
+			this.minY = -1;
+			this.maxX = 19;
+			this.maxY = 19;
+			this.unitsPerTick = 1;
+			// constants
+			this.axisColor = '#aaa';
+			this.font = '8pt Calibri';
+			this.tickSize = 15;
+
+			// relationships
+			this.context = this.canvas.getContext('2d');
+			this.rangeX = this.maxX - this.minX;
+			this.rangeY = this.maxY - this.minY;
+			this.unitX = this.canvas.width / this.rangeX;
+			this.unitY = this.canvas.height / this.rangeY;
+			this.centerY = Math.round(Math.abs(this.maxY / this.rangeY) * this.canvas.height);
+			this.centerX = Math.round(Math.abs(this.minX / this.rangeX) * this.canvas.width);
+			this.iteration = (this.maxX - this.minX) / 1000;
+			this.scaleX = this.canvas.width / this.rangeX;
+			this.scaleY = this.canvas.height / this.rangeY;
+
+			// draw x and y axis
+			this.drawXAxis();
+			this.drawYAxis();
+		  }
+		  Graph.prototype.drawXAxis = function() {
+			var context = this.context;
+			context.save();
+			context.beginPath();
+			context.moveTo(0, this.centerY);
+			context.lineTo(this.canvas.width, this.centerY);
+			context.strokeStyle = this.axisColor;
+			context.lineWidth = 2;
+			context.stroke();
+
+			// draw tick marks
+			var xPosIncrement = this.unitsPerTick * this.unitX;
+			var xPos, unit;
+			context.font = this.font;
+			context.textAlign = 'center';
+			context.textBaseline = 'top';
+
+			// draw left tick marks
+			xPos = this.centerX - xPosIncrement;
+			unit = -1 * this.unitsPerTick;
+			while(xPos > 0) {
+			  context.moveTo(xPos, this.centerY - this.tickSize / 2);
+			  context.lineTo(xPos, this.centerY + this.tickSize / 2);
+			  context.stroke();
+			  context.fillText(unit, xPos, this.centerY + this.tickSize / 2 + 3);
+			  unit -= this.unitsPerTick;
+			  xPos = Math.round(xPos - xPosIncrement);
+			}
+
+			// draw right tick marks
+			xPos = this.centerX + xPosIncrement;
+			unit = this.unitsPerTick;
+			while(xPos < this.canvas.width) {
+			  context.moveTo(xPos, this.centerY - this.tickSize / 2);
+			  context.lineTo(xPos, this.centerY + this.tickSize / 2);
+			  context.stroke();
+			  context.fillText(unit, xPos, this.centerY + this.tickSize / 2 + 3);
+			  unit += this.unitsPerTick;
+			  xPos = Math.round(xPos + xPosIncrement);
+			}
+			context.restore();
+		  };
+
+		  Graph.prototype.drawYAxis = function() {
+			var context = this.context;
+			context.save();
+			context.beginPath();
+			context.moveTo(this.centerX, 0);
+			context.lineTo(this.centerX, this.canvas.height);
+			context.strokeStyle = this.axisColor;
+			context.lineWidth = 2;
+			context.stroke();
+
+			// draw tick marks
+			var yPosIncrement = this.unitsPerTick * this.unitY;
+			var yPos, unit;
+			context.font = this.font;
+			context.textAlign = 'right';
+			context.textBaseline = 'middle';
+
+			// draw top tick marks
+			yPos = this.centerY - yPosIncrement;
+			unit = this.unitsPerTick;
+			while(yPos > 0) {
+			  context.moveTo(this.centerX - this.tickSize / 2, yPos);
+			  context.lineTo(this.centerX + this.tickSize / 2, yPos);
+			  context.stroke();
+			  context.fillText(unit, this.centerX - this.tickSize / 2 - 3, yPos);
+			  unit += this.unitsPerTick;
+			  yPos = Math.round(yPos - yPosIncrement);
+			}
+
+			// draw bottom tick marks
+			yPos = this.centerY + yPosIncrement;
+			unit = -1 * this.unitsPerTick;
+			while(yPos < this.canvas.height) {
+			  context.moveTo(this.centerX - this.tickSize / 2, yPos);
+			  context.lineTo(this.centerX + this.tickSize / 2, yPos);
+			  context.stroke();
+			  context.fillText(unit, this.centerX - this.tickSize / 2 - 3, yPos);
+			  unit -= this.unitsPerTick;
+			  yPos = Math.round(yPos + yPosIncrement);
+			}
+			context.restore();
+		  };
+		  var myGraph = new Graph({
+			canvasId: 'myCanvas',
+			minX: -10,
+			minY: -10,
+			maxX: 10,
+			maxY: 10,
+			unitsPerTick: 1
+		  });
+			
+			//origo on (25px, 475px)
+			var c=document.getElementById("myCanvas");
+			var ctx=c.getContext("2d");
+			
+			alkunopeusCalc();
+			lentoaikaCalc();
+			lentomatkaCalc();
+			lakikorkeusCalc();
+			
+			
+			// lähdetään piirtämään kuvaajaa
+			
+			pisteet = new Array();
+				
+			for(var x = 25; x < matkaPX; x++)
+			{
+				//Koska x = v0x * t => t = x / v0x
+				apuLuku1 = 3 * (x -25);
+				apuLuku2 = apuLuku1 / 5;
+				aika = apuLuku2 / v0x;
+				
+				//lasketaan pisteY
+				apuLuku1 = (v0y * aika);
+				apuLuku2 = (1/2) * g * Math.pow(aika,2);
+				pisteY = (apuLuku1 - apuLuku2)/5;
+				
+				pisteYPX = (19 - pisteY) * 25;	 //muutetaan y:n arvo pikseleiksi
+				
+				//lisätään uudet pisteet taulukkoon
+				pisteet.push(x, pisteYPX); 
+				
+			}
+			
+			pisteet.push(matkaPX, 475);
+			//alert(pisteet);
+			
+			ctx.beginPath();
+			ctx.moveTo(25,475);
+			ctx.curve(pisteet,0.3);
+			ctx.lineWidth = 5;
+			ctx.strokeStyle = "#5BE523";
+			ctx.stroke();
+		}
+		
+		function alkunopeusCalc() {
+			
+			//luetaan käyttäjän antama kulman arvo ja muutetaan se radiaaneiksi
+			apuLuku1 = document.getElementById("kulma").value;
+			kulma = Math.Radians(apuLuku1);
+		//	kulma = apuLuku2.toFixed(2);
+			
+			//luetaan käyttäjän antama lähtönopeuden arvo ja jaetaan se x ja y akselille
+			v0 = document.getElementById("v0").value;
+			v0x = v0 * Math.cos(kulma);
+			
+			v0y = v0 * Math.sin(kulma);
+		}
+		
+		function lentoaikaCalc() {
+		
+			/* y akselin lähtönopeus jaettuna gravitaatiolla 
+			(saadaan aika kun y = 0 eli ollaan lakikorkeudessa) * 2,
+			mikäli oletetaan että liike palaa alku korkeudelleen */
+			
+			apuLuku1 = (v0y / g) * 2;
+			lentoaika = apuLuku1.toFixed(4); //tallennetaan lentoaika muuttujaan 4 desimaalin tarkkuudella
+			apuLuku3 = apuLuku1.toFixed(2); //muutetaan 2lle decimaalille jotta tulos olisi "siistimpi" tulostaa
+			document.getElementById("lentoaika").value = apuLuku3;
+		}
+		
+		function lentomatkaCalc() {
+		
+			apuLuku1 = v0x * lentoaika; //x suuntainen lähtönopeus * aika koska * suuntainen nopeus pysyy samana koko ajan
+			matka = apuLuku1.toFixed(4); //tallennetaan matka muuttujaan 4 desimaalin tarkkuudella
+			apuLuku3 = apuLuku1.toFixed(2); //muutetaan 2lle decimaalille jotta tulos olisi "siistimpi" tulostaa
+			document.getElementById("matka").value = apuLuku3;
+
+			matkaPX = ((matka / 15) + 1) * 25;
+		}
+		
+		function lakikorkeusCalc() {
+		
+			apuLuku2 = lentoaika / 2; //lentoaika kun ollaan huipulla
+			
+			apuLuku1 = (v0y * apuLuku2) - (0.5 * g * Math.pow(apuLuku2,2));
+			huippuY = apuLuku1.toFixed(2);
+			
+			document.getElementById("huippu").value = huippuY;
+		}
+		
+		function annateht() {
+				
+				tKulma = Math.floor((Math.random() * 21) + 30);
+				document.getElementById("tKulma").value = tKulma;
+				
+				document.getElementById("OV").style.display = 'none';
+				document.getElementById("tehtava1").style.display = 'block'; //tehtävänanto näkyviin
+				document.getElementById("vastausDiv").style.display = 'block'; //vastaus sarake näkyviin
+				document.getElementById("tarkista").style.display = 'block';	//tarkista nappi käytettäviin
+
+		}
+		
+		function tarkistus() {
+		
+			vastaus = document.getElementById("vastaus").value;
+			
+			tKulma = document.getElementById("tKulma").value;
+			//muutetaan kulma radiaaneiksi ja pyöristetään se 4 decimaalin tarkkuudelle
+			apuLuku3 = Math.Radians(tKulma);
+			tKulma = apuLuku3.toFixed(4);
+
+			//lasketaan murtoluvun yläpuolella oleva lasku
+			apuLuku1 = Math.sqrt(200 * g);
+			
+			//lasketaan alapuoli
+			apuLuku3 = Math.sin(2 * tKulma);
+			apuLuku2 = Math.sqrt(apuLuku3);
+			
+			//lasketaan itse jakolasku
+			apuLuku3 = apuLuku1 / apuLuku2;
+			
+			//pyöristetään 2 decimaalin tarkkuudelle
+			tNopeus = apuLuku3.toFixed(2);
+			
+			ylaraja = tNopeus * 1 + 0.1;
+			alaraja = tNopeus * 1 - 0.1;
+			
+			document.getElementById("OV").style.display = 'block';
+			if(vastaus > alaraja && vastaus < ylaraja)
+			{
+				document.getElementById("OV").innerHTML = "OIKEIN!";
+			}
+			else
+			{
+				document.getElementById("OV").innerHTML = "VÄÄRIN!";
+			}
+			
+		}
+    </script>
+  </body>
+</html>
